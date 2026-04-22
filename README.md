@@ -16,8 +16,8 @@ A full-stack AI-powered application that analyzes resumes using ATS scoring, key
 - Role-based scoring system
 
 ## 🌐 Live Demo
-Frontend: https://resume-analyzer-delta-weld.vercel.app
-Backend: https://resume-analyzer-api-8ocp.onrender.com
+- 🚀 Frontend: [Open App](https://resume-analyzer-delta-weld.vercel.app)  
+- ⚙️ Backend: [API](https://resume-analyzer-api-8ocp.onrender.com)
 
 ## ⚙️ Setup
 
