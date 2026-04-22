@@ -128,7 +128,7 @@ export default function App() {
     formData.append("experienceLevel", "junior");
     try {
       setLoading(true); setResult(null);
-      const res = await axios.post("http://localhost:5000/api/analyze", formData);
+      const res = await axios.post("https://resume-analyzer-api-8ocp.onrender.com/api/analyze", formData);
       setResult(res.data);
     } catch (err) {
       console.error(err); alert("Error analyzing resume");
