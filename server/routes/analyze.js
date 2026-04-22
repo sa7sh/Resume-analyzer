@@ -11,10 +11,21 @@ const { cleanResumeText } = require("../services/textCleaner");
 
 const router = express.Router();
 
-// multer storage
+/* =========================
+   🔧 FIX: Ensure uploads folder exists
+========================= */
+const uploadPath = path.join(__dirname, "../uploads");
+
+if (!fs.existsSync(uploadPath)) {
+  fs.mkdirSync(uploadPath, { recursive: true });
+}
+
+/* =========================
+   Multer Storage
+========================= */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, "../uploads"));
+    cb(null, uploadPath); // ✅ use ensured path
   },
   filename: (req, file, cb) => {
     const uniqueName = `${Date.now()}${path.extname(file.originalname)}`;
@@ -32,7 +43,9 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter });
 
-// helper to parse AI JSON safely
+/* =========================
+   Safe JSON Parse
+========================= */
 const safeParse = (text) => {
   try {
     return JSON.parse(text);
@@ -47,7 +60,9 @@ const safeParse = (text) => {
   }
 };
 
-// POST /api/analyze
+/* =========================
+   POST /api/analyze
+========================= */
 router.post("/", upload.single("resume"), async (req, res) => {
   try {
     if (!req.file) {
@@ -59,19 +74,19 @@ router.post("/", upload.single("resume"), async (req, res) => {
     // 1. Extract raw text
     const rawText = await extractTextFromPDF(req.file.path);
 
-    // cleanup uploaded file
+    // 2. Delete file AFTER processing
     fs.unlink(req.file.path, (err) => {
       if (err) console.error("Failed to delete file:", err);
     });
 
-    // 2. Clean text
+    // 3. Clean text
     const cleanedText = cleanResumeText(rawText);
 
-    // 3. Extract JD Keywords
+    // 4. Extract JD Keywords
     const jobDescription = req.body.jobDescription || "";
     const jdKeywords = extractKeywordsFromJD(jobDescription);
 
-    // 4. Call AI for everything (Scoring, Extraction, Feedback)
+    // 5. AI Call
     console.log("Starting AI analysis...");
     const aiResponseRaw = await generateFeedback({
       resumeText: cleanedText,
@@ -84,46 +99,45 @@ router.post("/", upload.single("resume"), async (req, res) => {
       return res.status(500).json({
         success: false,
         error: "AI analysis failed to generate a valid result.",
-        debug: aiResponseRaw
+        debug: aiResponseRaw,
       });
     }
 
-    // 5. Override numeric scores with deterministic ATS scorer
-    const role            = (req.body.role || "default").toLowerCase();
+    // 6. ATS Scoring
+    const role = (req.body.role || "default").toLowerCase();
     const experienceLevel = (req.body.experienceLevel || "junior").toLowerCase();
 
-    // Build a single string from AI qualitative fields for alignment logic
     const fb = aiResponse.aiFeedback || {};
     const aiFeedbackText = [
       fb.overall_feedback || "",
-      ...(fb.strengths    || []),
+      ...(fb.strengths || []),
       ...(fb.improvements || []),
     ].join(" ");
 
     const { atsScore, breakdown, keywordScoreDetails, confidence } = computeAtsScore({
-      sections:        aiResponse.sections,
-      matchedKeywords: aiResponse.keywordAnalysis?.matched  || [],
-      missingKeywords: aiResponse.keywordAnalysis?.missing  || [],
+      sections: aiResponse.sections,
+      matchedKeywords: aiResponse.keywordAnalysis?.matched || [],
+      missingKeywords: aiResponse.keywordAnalysis?.missing || [],
       role,
       experienceLevel,
       aiFeedbackText,
     });
 
-    aiResponse.atsScore          = atsScore;
-    aiResponse.atsBreakdown      = {
+    aiResponse.atsScore = atsScore;
+    aiResponse.atsBreakdown = {
       keywordPercentage: breakdown.keywordPercentage,
-      projectsScore:     breakdown.projectsScore,
-      skillsScore:       breakdown.skillsScore,
-      summaryScore:      breakdown.summaryScore,
+      projectsScore: breakdown.projectsScore,
+      skillsScore: breakdown.skillsScore,
+      summaryScore: breakdown.summaryScore,
     };
     aiResponse.keywordScoreDetails = keywordScoreDetails;
-    aiResponse.confidence          = confidence;
+    aiResponse.confidence = confidence;
 
-    // 6. Success
+    // 7. Send response
     res.json(aiResponse);
 
   } catch (err) {
-    console.error("Error in /api/analyze:", err.message);
+    console.error("Error in /api/analyze:", err);
     res.status(500).json({
       error: err.message || "Internal server error",
     });
